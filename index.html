@@ -1,0 +1,364 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition System</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .card {
+            margin-bottom: 20px;
+        }
+        .progress {
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        .person-card {
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .person-card:hover {
+            transform: scale(1.02);
+        }
+        .count-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Face Recognition System</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Upload Known People</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="/upload_known" method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="known_files" class="form-label">Select Images</label>
+                                <input class="form-control" type="file" id="known_files" name="files[]" multiple accept="image/*">
+                                <div class="form-text">Upload reference images of known people. Each filename will be used as the person's name.</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Upload</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Upload Dataset Images</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="/upload_dataset" method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="dataset_files" class="form-label">Select Images</label>
+                                <input class="form-control" type="file" id="dataset_files" name="files[]" multiple accept="image/*">
+                                <div class="form-text">Upload images to be processed and categorized.</div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Upload</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Process Images</h5>
+                    </div>
+                    <div class="card-body">
+                        <form action="/start_processing" method="post">
+                            <button type="submit" class="btn btn-success" id="process-btn" 
+                                {{ 'disabled' if status.is_processing else '' }}>
+                                Start Processing
+                            </button>
+                        </form>
+                        
+                        <div class="mt-3">
+                            <form action="/reset" method="post" onsubmit="return confirm('Are you sure you want to reset? This will clear all processed data.');">
+                                <button type="submit" class="btn btn-danger" 
+                                    {{ 'disabled' if status.is_processing else '' }}>
+                                    Reset System
+                                </button>
+                            </form>
+                        </div>
+                        
+                        {% if status.is_processing or status.completed %}
+                        <div class="mt-3">
+                            <strong>Status:</strong> {{ status.current_task }}
+                            {% if status.total > 0 %}
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: {{ (status.progress / status.total) * 100 }}%;" 
+                                     aria-valuenow="{{ status.progress }}" aria-valuemin="0" aria-valuemax="{{ status.total }}">
+                                    {{ status.progress }}/{{ status.total }}
+                                </div>
+                            </div>
+                            {% endif %}
+                            <div class="mt-2">
+                                <em>{{ status.message }}</em>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Results</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if not known_people and not unknown_people and group_count == 0 %}
+                        <div class="alert alert-info">
+                            No processed images yet. Upload images and click "Start Processing".
+                        </div>
+                        {% else %}
+                            {% if group_count > 0 %}
+                            <div class="card mb-4">
+                                <div class="card-header bg-warning">
+                                    <h6 class="mb-0">Group Images</h6>
+                                </div>
+                                <div class="card-body">
+                                    <a href="/view/Group" class="btn btn-outline-primary">
+                                        View Group Images <span class="badge bg-secondary">{{ group_count }}</span>
+                                    </a>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if known_people %}
+                            <h5>Known People</h5>
+                            <div class="row">
+                                {% for person, count in known_people.items() %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card person-card h-100" onclick="window.location='/view/{{ person }}'">
+                                        <div class="card-body">
+                                            <h6 class="card-title">{{ person }}</h6>
+                                            <span class="badge bg-primary count-badge">{{ count }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            
+                            {% if unknown_people %}
+                            <h5 class="mt-4">Unknown People</h5>
+                            <div class="row">
+                                {% for person, count in unknown_people.items() %}
+                                <div class="col-md-4 mb-3">
+                                    <div class="card person-card h-100" onclick="window.location='/view/{{ person }}'">
+                                        <div class="card-body">
+                                            <h6 class="card-title">{{ person }}</h6>
+                                            <span class="badge bg-danger count-badge">{{ count }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Poll status for updates while processing
+        let statusPolling;
+        
+        function pollStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.is_processing) {
+                        document.getElementById('process-btn').disabled = true;
+                        
+                        if (!statusPolling) {
+                            statusPolling = setInterval(pollStatus, 2000);
+                        }
+                    } else {
+                        document.getElementById('process-btn').disabled = false;
+                        
+                        if (statusPolling) {
+                            clearInterval(statusPolling);
+                            statusPolling = null;
+                            
+                            // Refresh page to show updated results
+                            if (data.completed) {
+                                setTimeout(() => location.reload(), 1000);
+                            }
+                        }
+                    }
+                });
+        }
+        
+        // Start polling if processing is active
+        if ({{ 'true' if status.is_processing else 'false' }}) {
+            pollStatus();
+        }
+    </script>
+</body>
+</html>
+
+<!-- templates/person.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ person }} - Face Recognition System</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .image-card {
+            margin-bottom: 20px;
+        }
+        .image-card img {
+            width: 100%;
+            height: auto;
+            object-fit: cover;
+        }
+        .modal-body img {
+            max-width: 100%;
+            max-height: 80vh;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Face Recognition System</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>{{ person }}</h2>
+            <a href="/" class="btn btn-outline-primary">Back to Dashboard</a>
+        </div>
+        
+        {% if person.startswith('Unknown_') %}
+        <div class="card mb-4">
+            <div class="card-header bg-info">
+                <h5 class="mb-0">Reclassify</h5>
+            </div>
+            <div class="card-body">
+                <form id="reclassify-form">
+                    <input type="hidden" name="old_id" value="{{ person }}">
+                    <div class="row">
+                        <div class="col">
+                            <input type="text" class="form-control" name="new_id" placeholder="New person name" required>
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-primary">Reclassify</button>
+                        </div>
+                    </div>
+                </form>
+                <div id="reclassify-result" class="mt-2"></div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Images ({{ images|length }})</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for image in images %}
+                    <div class="col-md-3">
+                        <div class="card image-card">
+                            <img src="/image/{{ person }}/{{ image }}" alt="{{ image }}" 
+                                 class="card-img-top" data-bs-toggle="modal" data-bs-target="#imageModal" 
+                                 data-image="/image/{{ person }}/{{ image }}" data-title="{{ image }}">
+                            <div class="card-footer text-muted small">
+                                {{ image }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageModalLabel">Image</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img src="" alt="Full Size Image" id="modalImage">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Handle image modal
+        const imageModal = document.getElementById('imageModal');
+        if (imageModal) {
+            imageModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const imageSrc = button.getAttribute('data-image');
+                const imageTitle = button.getAttribute('data-title');
+                
+                const modalTitle = this.querySelector('.modal-title');
+                const modalImage = document.getElementById('modalImage');
+                
+                modalTitle.textContent = imageTitle;
+                modalImage.src = imageSrc;
+            });
+        }
+        
+        // Handle reclassify form
+        const reclassifyForm = document.getElementById('reclassify-form');
+        if (reclassifyForm) {
+            reclassifyForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const resultDiv = document.getElementById('reclassify-result');
+                resultDiv.innerHTML = '<div class="alert alert-info">Processing...</div>';
+                
+                const formData = new FormData(this);
+                
+                fetch('/reclassify', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        resultDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 2000);
+                    } else {
+                        resultDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                    }
+                })
+                .catch(error => {
+                    resultDiv.innerHTML = '<div class="alert alert-danger">An error occurred</div>';
+                    console.error('Error:', error);
+                });
+            });
+        }
+    </script>
+</body>
+</html>
